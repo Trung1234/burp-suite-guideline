@@ -147,6 +147,42 @@ Content-Length: -1
 
 ---
 
+### 3.8 Chặn request rồi sửa URL thành giá trị linh tinh
+
+Khi một request bị chặn (intercept) trong Burp và URL bị sửa thành giá trị không hợp lệ, Tomcat có thể trả về trang lỗi 500 thay vì 404 nếu filter/security chain xử lý không đúng cách.
+
+**Bước thực hiện:**
+
+1. Bật **Intercept is on** trong Burp Proxy.
+2. Gửi bất kỳ request nào từ trình duyệt → request bị giữ trong Intercept.
+3. Trong cửa sổ Intercept, sửa đường dẫn URL thành các giá trị linh tinh:
+   ```
+   GET /{} HTTP/1.1
+   GET /[{}] HTTP/1.1
+   GET /| HTTP/1.1
+   GET /' HTTP/1.1
+   GET /" HTTP/1.1
+   GET /test;foo=bar HTTP/1.1
+   GET /;test HTTP/1.1
+   GET ///// HTTP/1.1
+   GET /./ HTTP/1.1
+   GET /../../ HTTP/1.1
+   GET /% HTTP/1.1
+   GET /%%00%01 HTTP/1.1
+   GET /.env HTTP/1.1
+   GET /.git/config HTTP/1.1
+   GET /WEB-INF/web.xml HTTP/1.1
+   GET /..;/ HTTP/1.1
+   ```
+4. Forward request qua Tomcat.
+5. Quan sát response — nếu nhận được trang HTML lỗi 500 của Tomcat (có chứa `Apache Tomcat` hoặc stack trace) thay vì 404 → ứng dụng đang leak thông tin.
+
+**Giải thích:** Khi URL chứa ký tự đặc biệt, path traversal hoặc format không hợp lệ, một số filter bảo mật (WAF, security filter) có thể throw exception không được handle → Tomcat render trang lỗi 500 kèm thông tin.
+
+**Mẹo:** Dùng Intruder với payload list các URL path đặc biệt kết hợp Grep-Match từ khóa `Tomcat`, `500`, `Exception`, `java.lang` để nhanh chóng phát hiện lỗi.
+
+---
+
 ## 4. Nhận biết lỗi 500 có lộ thông tin
 
 ### Dấu hiệu nguy hiểm trong response:
